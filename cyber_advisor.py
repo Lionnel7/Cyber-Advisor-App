@@ -10,7 +10,7 @@ st.caption("Assistant Expert en Cybersécurité (Red & Blue Team)")
 try:
     api_key = st.secrets["GROQ_API_KEY"]
 except:
-    st.error("Erreur : Clé API introuvable. Configurez les secrets.")
+    st.error("Erreur : Clé API introuvable. Avez-vous bien configuré les Secrets dans Streamlit ?")
     st.stop()
 
 # 3. Connexion au moteur IA
@@ -19,7 +19,8 @@ client = Groq(api_key=api_key)
 # 4. Gestion de la mémoire (Historique de chat)
 if "messages" not in st.session_state:
     st.session_state.messages = [
-        {"role": "system", "content": "Tu es un expert en cybersécurité (SISR). Tu aides les administrateurs et auditeurs. Tes réponses sont techniques, précises et en français. Si tu donnes du code, commente-le pour expliquer la sécurité."}
+        # Le prompt système définit la personnalité de l'IA
+        {"role": "system", "content": "Tu es un expert senior en cybersécurité (SISR). Tu aides les administrateurs systèmes et les pentesters. Tes réponses sont techniques, précises et sécurisées. Tu parles français. Si tu donnes du code, commente-le pour expliquer les aspects sécurité."}
     ]
 
 # 5. Affichage des anciens messages
@@ -34,11 +35,11 @@ if prompt := st.chat_input("Pose ta question cyber..."):
     st.chat_message("user").write(prompt)
 
     # Générer la réponse via Groq
-    # MODIFICATION ICI : On utilise un modèle plus stable (Mixtral)
     msg_container = st.chat_message("assistant")
     try:
         stream = client.chat.completions.create(
-            model="mixtral-8x7b-32768",  # <-- C'EST ICI QU'ON A CHANGÉ
+            # Utilisation du dernier modèle stable (Llama 3.3 Versatile)
+            model="llama-3.3-70b-versatile",
             messages=st.session_state.messages,
             stream=True,
         )
@@ -46,5 +47,6 @@ if prompt := st.chat_input("Pose ta question cyber..."):
         
         # Enregistrer la réponse
         st.session_state.messages.append({"role": "assistant", "content": response})
+        
     except Exception as e:
-        st.error(f"Erreur de connexion avec l'IA : {e}")
+        st.error(f"Erreur technique : {e}")
