@@ -33,14 +33,18 @@ if prompt := st.chat_input("Pose ta question cyber..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     st.chat_message("user").write(prompt)
 
-    # Générer la réponse via Groq (Llama 3)
+    # Générer la réponse via Groq
+    # MODIFICATION ICI : On utilise un modèle plus stable (Mixtral)
     msg_container = st.chat_message("assistant")
-    stream = client.chat.completions.create(
-        model="llama3-70b-8192",
-        messages=st.session_state.messages,
-        stream=True,
-    )
-    response = msg_container.write_stream(stream)
-    
-    # Enregistrer la réponse
-    st.session_state.messages.append({"role": "assistant", "content": response})
+    try:
+        stream = client.chat.completions.create(
+            model="mixtral-8x7b-32768",  # <-- C'EST ICI QU'ON A CHANGÉ
+            messages=st.session_state.messages,
+            stream=True,
+        )
+        response = msg_container.write_stream(stream)
+        
+        # Enregistrer la réponse
+        st.session_state.messages.append({"role": "assistant", "content": response})
+    except Exception as e:
+        st.error(f"Erreur de connexion avec l'IA : {e}")
