@@ -11,12 +11,22 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# --- 🔒 SÉCURITÉ : CACHER LE MENU ET LE LOGO GITHUB ---
+# C'est ici qu'on injecte du CSS pour masquer l'interface par défaut de Streamlit
+hide_streamlit_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            header {visibility: hidden;}
+            </style>
+            """
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+
 # --- 2. GESTION BASE DE DONNÉES (SQLite) ---
 def init_db():
     """Initialise la base de données locale si elle n'existe pas"""
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
-    # Création de la table utilisateurs
     c.execute('''
         CREATE TABLE IF NOT EXISTS users (
             username TEXT PRIMARY KEY,
@@ -27,11 +37,10 @@ def init_db():
     conn.close()
 
 def hash_password(password):
-    """Transforme le mot de passe en empreinte SHA-256 (Sécurité)"""
+    """Transforme le mot de passe en empreinte SHA-256"""
     return hashlib.sha256(password.encode()).hexdigest()
 
 def create_user(username, password):
-    """Crée un nouvel utilisateur dans la BDD"""
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
     hashed_pw = hash_password(password)
@@ -40,12 +49,11 @@ def create_user(username, password):
         conn.commit()
         return True
     except sqlite3.IntegrityError:
-        return False # L'utilisateur existe déjà
+        return False
     finally:
         conn.close()
 
 def check_user(username, password):
-    """Vérifie si le login/mot de passe correspond"""
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
     hashed_pw = hash_password(password)
@@ -54,7 +62,6 @@ def check_user(username, password):
     conn.close()
     return result is not None
 
-# On initialise la DB au lancement
 init_db()
 
 # --- 3. GESTION DE LA SESSION ---
@@ -82,12 +89,9 @@ def logout():
 
 # --- 5. PAGE D'ACCUEIL (LOGIN & SIGNUP) ---
 def show_auth_page():
-    # CSS pour le style
     st.markdown("""
         <style>
-            .stTabs [data-baseweb="tab-list"] {
-                gap: 2px;
-            }
+            .stTabs [data-baseweb="tab-list"] { gap: 2px; }
             .stTabs [data-baseweb="tab"] {
                 height: 50px;
                 white-space: pre-wrap;
@@ -114,28 +118,23 @@ def show_auth_page():
         st.title("🛡️ Portail Cyber-Sentinel")
         st.markdown("Accès restreint aux personnels autorisés.")
 
-        # --- SYSTÈME D'ONGLETS ---
         tab1, tab2 = st.tabs(["🔑 Se connecter", "📝 Créer un compte"])
 
-        # ONGLET 1 : CONNEXION
         with tab1:
             st.subheader("Connexion")
             login_user = st.text_input("Nom d'utilisateur", key="login_user")
             login_pass = st.text_input("Mot de passe", type="password", key="login_pass")
-            
             if st.button("Entrer dans le système", key="btn_login"):
                 if check_user(login_user, login_pass):
                     login_success(login_user)
                 else:
                     st.error("Identifiants incorrects ou compte inexistant.")
 
-        # ONGLET 2 : INSCRIPTION
         with tab2:
             st.subheader("Nouvel accès")
             new_user = st.text_input("Choisir un identifiant", key="new_user")
             new_pass = st.text_input("Choisir un mot de passe", type="password", key="new_pass")
             confirm_pass = st.text_input("Confirmer le mot de passe", type="password")
-            
             if st.button("Créer le compte", key="btn_signup"):
                 if new_pass != confirm_pass:
                     st.warning("Les mots de passe ne correspondent pas.")
@@ -143,15 +142,15 @@ def show_auth_page():
                     st.warning("L'identifiant ne peut pas être vide.")
                 else:
                     if create_user(new_user, new_pass):
-                        st.success("✅ Compte créé avec succès ! Vous pouvez vous connecter.")
+                        st.success("✅ Compte créé ! Connectez-vous.")
                     else:
-                        st.error("Ce nom d'utilisateur est déjà pris.")
+                        st.error("Utilisateur déjà existant.")
 
 # --- 6. PAGE PRINCIPALE (APP) ---
 def show_main_app():
     with st.sidebar:
         st.title(f"👤 {st.session_state.username}")
-        st.caption("Statut : Connecté")
+        st.caption("Statut : Connecté (Admin)")
         if st.button("Se déconnecter"):
             logout()
             
@@ -164,16 +163,14 @@ def show_main_app():
                 st.session_state.feedbacks.append({"user": st.session_state.username, "note": note, "comment": comment})
                 st.success("Avis enregistré !")
         
-        # Affichage des avis
         if st.session_state.feedbacks:
             st.divider()
             st.write("📢 **Derniers avis :**")
-            for f in st.session_state.feedbacks[-3:]: # Affiche les 3 derniers
+            for f in st.session_state.feedbacks[-3:]:
                 st.info(f"**{f['user']}** ({f['note']}/5): {f['comment']}")
 
     st.title("🤖 Cyber-Sentinel AI")
     
-    # Connexion API Groq
     try:
         api_key = st.secrets["GROQ_API_KEY"]
         client = Groq(api_key=api_key)
@@ -205,7 +202,7 @@ def show_main_app():
         except Exception as e:
             st.error(f"Erreur : {e}")
 
-# --- 7. LOGIQUE DE NAVIGATION ---
+# --- 7. NAVIGATION ---
 if st.session_state.authenticated:
     show_main_app()
 else:
