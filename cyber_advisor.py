@@ -1,53 +1,103 @@
 import streamlit as st
 from groq import Groq
-import time
+import sqlite3
+import hashlib
 
 # --- 1. CONFIGURATION GLOBALE ---
 st.set_page_config(
     page_title="Cyber-Sentinel",
     page_icon="🛡️",
-    layout="wide", # On passe en mode large pour un look plus pro
+    layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --- 2. GESTION DE LA SESSION (MÉMOIRE) ---
+# --- 2. GESTION BASE DE DONNÉES (SQLite) ---
+def init_db():
+    """Initialise la base de données locale si elle n'existe pas"""
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+    # Création de la table utilisateurs
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            username TEXT PRIMARY KEY,
+            password TEXT
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+def hash_password(password):
+    """Transforme le mot de passe en empreinte SHA-256 (Sécurité)"""
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def create_user(username, password):
+    """Crée un nouvel utilisateur dans la BDD"""
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+    hashed_pw = hash_password(password)
+    try:
+        c.execute('INSERT INTO users (username, password) VALUES (?, ?)', (username, hashed_pw))
+        conn.commit()
+        return True
+    except sqlite3.IntegrityError:
+        return False # L'utilisateur existe déjà
+    finally:
+        conn.close()
+
+def check_user(username, password):
+    """Vérifie si le login/mot de passe correspond"""
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+    hashed_pw = hash_password(password)
+    c.execute('SELECT * FROM users WHERE username = ? AND password = ?', (username, hashed_pw))
+    result = c.fetchone()
+    conn.close()
+    return result is not None
+
+# On initialise la DB au lancement
+init_db()
+
+# --- 3. GESTION DE LA SESSION ---
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
+if "username" not in st.session_state:
+    st.session_state.username = ""
 if "messages" not in st.session_state:
     st.session_state.messages = [
-        {"role": "system", "content": "Tu es un expert senior en cybersécurité (SISR). Réponds de manière technique et précise."}
+        {"role": "system", "content": "Tu es un expert senior en cybersécurité (SISR). Réponds de manière technique."}
     ]
 if "feedbacks" not in st.session_state:
-    st.session_state.feedbacks = [] # Pour stocker les avis
+    st.session_state.feedbacks = []
 
-# --- 3. FONCTIONS UTILITAIRES ---
-
-def check_login(username, password):
-    """Vérifie les identifiants (Simple pour la démo)"""
-    # Dans la vraie vie, on utilise st.secrets ou une base de données
-    if username == "admin" and password == "sio2025":
-        st.session_state.authenticated = True
-        st.rerun() # Recharge la page pour afficher le chat
-    else:
-        st.error("🛑 Identifiants incorrects (Essayez admin / sio2025)")
+# --- 4. FONCTIONS LOGIN / LOGOUT ---
+def login_success(username):
+    st.session_state.authenticated = True
+    st.session_state.username = username
+    st.rerun()
 
 def logout():
     st.session_state.authenticated = False
+    st.session_state.username = ""
     st.rerun()
 
-# --- 4. PAGE DE CONNEXION (DESIGN) ---
-def show_login_page():
-    # CSS Personnalisé pour centrer et embellir le login
+# --- 5. PAGE D'ACCUEIL (LOGIN & SIGNUP) ---
+def show_auth_page():
+    # CSS pour le style
     st.markdown("""
         <style>
-            .login-container {
-                padding: 2rem;
-                border-radius: 10px;
-                background-color: #f0f2f6;
-                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            .stTabs [data-baseweb="tab-list"] {
+                gap: 2px;
             }
-            .stButton>button {
-                width: 100%;
+            .stTabs [data-baseweb="tab"] {
+                height: 50px;
+                white-space: pre-wrap;
+                background-color: #f0f2f6;
+                border-radius: 4px 4px 0px 0px;
+                gap: 1px;
+                padding-top: 10px;
+                padding-bottom: 10px;
+            }
+            .stTabs [aria-selected="true"] {
                 background-color: #FF4B4B;
                 color: white;
             }
@@ -57,73 +107,87 @@ def show_login_page():
     col1, col2 = st.columns([1, 1])
 
     with col1:
-        # Image Cybernétique (URL publique)
-        st.image("https://images.unsplash.com/photo-1550751827-4bd374c3f58b", 
-                 caption="Secure Access Gateway", use_container_width=True)
+        st.image("https://images.unsplash.com/photo-1555949963-ff9fe0c870eb", 
+                 caption="Cyber-Sentinel Secure Database", use_container_width=True)
 
     with col2:
-        st.markdown("<br><br>", unsafe_allow_html=True) # Espacement
-        st.title("🔒 Portail Cyber-Sentinel")
-        st.markdown("Veuillez vous authentifier pour accéder à l'IA SecOps.")
-        
-        username = st.text_input("Identifiant")
-        password = st.text_input("Mot de passe", type="password")
-        
-        if st.button("Se connecter 🚀"):
-            check_login(username, password)
+        st.title("🛡️ Portail Cyber-Sentinel")
+        st.markdown("Accès restreint aux personnels autorisés.")
 
-# --- 5. PAGE PRINCIPALE (CHATBOT) ---
+        # --- SYSTÈME D'ONGLETS ---
+        tab1, tab2 = st.tabs(["🔑 Se connecter", "📝 Créer un compte"])
+
+        # ONGLET 1 : CONNEXION
+        with tab1:
+            st.subheader("Connexion")
+            login_user = st.text_input("Nom d'utilisateur", key="login_user")
+            login_pass = st.text_input("Mot de passe", type="password", key="login_pass")
+            
+            if st.button("Entrer dans le système", key="btn_login"):
+                if check_user(login_user, login_pass):
+                    login_success(login_user)
+                else:
+                    st.error("Identifiants incorrects ou compte inexistant.")
+
+        # ONGLET 2 : INSCRIPTION
+        with tab2:
+            st.subheader("Nouvel accès")
+            new_user = st.text_input("Choisir un identifiant", key="new_user")
+            new_pass = st.text_input("Choisir un mot de passe", type="password", key="new_pass")
+            confirm_pass = st.text_input("Confirmer le mot de passe", type="password")
+            
+            if st.button("Créer le compte", key="btn_signup"):
+                if new_pass != confirm_pass:
+                    st.warning("Les mots de passe ne correspondent pas.")
+                elif new_user == "":
+                    st.warning("L'identifiant ne peut pas être vide.")
+                else:
+                    if create_user(new_user, new_pass):
+                        st.success("✅ Compte créé avec succès ! Vous pouvez vous connecter.")
+                    else:
+                        st.error("Ce nom d'utilisateur est déjà pris.")
+
+# --- 6. PAGE PRINCIPALE (APP) ---
 def show_main_app():
-    # --- Sidebar (Menu Latéral) ---
     with st.sidebar:
-        st.title("🛡️ Tableau de bord")
-        st.success(f"Connecté en tant que : Admin")
-        
-        # Bouton Déconnexion
+        st.title(f"👤 {st.session_state.username}")
+        st.caption("Statut : Connecté")
         if st.button("Se déconnecter"):
             logout()
             
         st.divider()
-        
-        # --- SYSTÈME D'AVIS ---
-        st.subheader("⭐ Votre avis nous intéresse")
+        st.subheader("⭐ Feedback")
         with st.form("feedback_form"):
-            note = st.slider("Notez la pertinence de l'IA", 1, 5, 5)
-            commentaire = st.text_area("Commentaire (Optionnel)")
-            submit_avis = st.form_submit_button("Envoyer l'avis")
-            
-            if submit_avis:
-                # On enregistre l'avis dans la session
-                st.session_state.feedbacks.append({"note": note, "comment": commentaire})
-                st.toast("Merci pour votre retour !", icon="✅")
-
-        # Affichage des statistiques d'avis (Simulation)
+            note = st.slider("Note", 1, 5, 5)
+            comment = st.text_area("Avis")
+            if st.form_submit_button("Envoyer"):
+                st.session_state.feedbacks.append({"user": st.session_state.username, "note": note, "comment": comment})
+                st.success("Avis enregistré !")
+        
+        # Affichage des avis
         if st.session_state.feedbacks:
-            avg = sum(f['note'] for f in st.session_state.feedbacks) / len(st.session_state.feedbacks)
-            st.metric("Note moyenne des utilisateurs", f"{avg:.1f}/5")
+            st.divider()
+            st.write("📢 **Derniers avis :**")
+            for f in st.session_state.feedbacks[-3:]: # Affiche les 3 derniers
+                st.info(f"**{f['user']}** ({f['note']}/5): {f['comment']}")
 
-    # --- Zone Centrale (Chat) ---
     st.title("🤖 Cyber-Sentinel AI")
-    st.caption("Assistant connecté au modèle Llama 3 via Groq LPU")
-
-    # Connexion API
+    
+    # Connexion API Groq
     try:
         api_key = st.secrets["GROQ_API_KEY"]
         client = Groq(api_key=api_key)
     except:
-        st.error("Erreur de clé API. Vérifiez les secrets.")
+        st.error("Erreur Clé API.")
         st.stop()
 
-    # Affichage historique
     for msg in st.session_state.messages:
         if msg["role"] != "system":
             st.chat_message(msg["role"]).write(msg["content"])
 
-    # Zone de saisie
-    if prompt := st.chat_input("Analysez un log, un script, une vulnérabilité..."):
+    if prompt := st.chat_input("Votre requête..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         st.chat_message("user").write(prompt)
-
         msg_container = st.chat_message("assistant")
         
         try:
@@ -132,21 +196,17 @@ def show_main_app():
                 messages=st.session_state.messages,
                 stream=True,
             )
-            
-            # Générateur de texte
             def generate_text():
                 for chunk in stream:
                     if chunk.choices[0].delta.content:
                         yield chunk.choices[0].delta.content
-
             response = msg_container.write_stream(generate_text())
             st.session_state.messages.append({"role": "assistant", "content": response})
-            
         except Exception as e:
-            st.error(f"Erreur API : {e}")
+            st.error(f"Erreur : {e}")
 
-# --- 6. LOGIQUE DE NAVIGATION ---
+# --- 7. LOGIQUE DE NAVIGATION ---
 if st.session_state.authenticated:
     show_main_app()
 else:
-    show_login_page()
+    show_auth_page()
