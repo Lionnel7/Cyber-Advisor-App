@@ -3,7 +3,6 @@ from groq import Groq
 import sqlite3
 import hashlib
 
-# --- 1. CONFIGURATION GLOBALE ---
 st.set_page_config(
     page_title="Cyber-Sentinel",
     page_icon="🛡️",
@@ -11,8 +10,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- 🔒 SÉCURITÉ : CACHER LE MENU ET LE LOGO GITHUB ---
-# C'est ici qu'on injecte du CSS pour masquer l'interface par défaut de Streamlit
 hide_streamlit_style = """
             <style>
             #MainMenu {visibility: hidden;}
@@ -22,7 +19,6 @@ hide_streamlit_style = """
             """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
-# --- 2. GESTION BASE DE DONNÉES (SQLite) ---
 def init_db():
     """Initialise la base de données locale si elle n'existe pas"""
     conn = sqlite3.connect('users.db')
@@ -64,7 +60,6 @@ def check_user(username, password):
 
 init_db()
 
-# --- 3. GESTION DE LA SESSION ---
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 if "username" not in st.session_state:
@@ -76,7 +71,6 @@ if "messages" not in st.session_state:
 if "feedbacks" not in st.session_state:
     st.session_state.feedbacks = []
 
-# --- 4. FONCTIONS LOGIN / LOGOUT ---
 def login_success(username):
     st.session_state.authenticated = True
     st.session_state.username = username
@@ -87,7 +81,6 @@ def logout():
     st.session_state.username = ""
     st.rerun()
 
-# --- 5. PAGE D'ACCUEIL (LOGIN & SIGNUP) ---
 def show_auth_page():
     st.markdown("""
         <style>
@@ -146,7 +139,6 @@ def show_auth_page():
                     else:
                         st.error("Utilisateur déjà existant.")
 
-# --- 6. PAGE PRINCIPALE (APP) ---
 def show_main_app():
     with st.sidebar:
         st.title(f"👤 {st.session_state.username}")
@@ -202,7 +194,6 @@ def show_main_app():
         except Exception as e:
             st.error(f"Erreur : {e}")
 
-# --- 7. NAVIGATION ---
 if st.session_state.authenticated:
     show_main_app()
 else:
